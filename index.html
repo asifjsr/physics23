@@ -307,52 +307,61 @@ async function tryFetch(){
 async function fetchData(){
   const dot=document.getElementById('sdot');
   const stxt=document.getElementById('stxt');
+
   try{
     dot.className='sdot loading';
     stxt.textContent='Fetching…';
-    let txt=null, lastErr=null;
-    // Try each proxy in order, rotate on failure
-    for(let attempt=0;attempt<PROXIES.length;attempt++){
-      try{
-        txt=await tryFetch();
-        break;
-      }catch(e){
-        lastErr=e;
-        proxyIdx=(proxyIdx+1)%PROXIES.length;
-      }
+
+    const res = await fetch(SHEET + "&t=" + Date.now(), {
+      cache: "no-store"
+    });
+
+    if(!res.ok) throw new Error("Network error");
+
+    const txt = await res.text();
+
+    if(!txt || txt.length < 20){
+      throw new Error("Empty data");
     }
-    if(!txt)throw lastErr||new Error('All proxies failed');
 
-    const parsed=parseCSV(txt);
-    if(!parsed.length)throw new Error('Parsed 0 rows — check sheet is published');
+    const parsed = parseCSV(txt);
 
-    allData=parsed;
+    if(!parsed.length){
+      throw new Error("No rows found");
+    }
+
+    allData = parsed;
+
     document.getElementById('errbox').style.display='none';
+
     updateStats(allData);
     buildUpcoming(allData);
     buildFilters(allData);
     buildTable(allData);
 
     dot.className='sdot';
-    stxt.textContent='Live — updates every 5s';
-    document.getElementById('lupd').textContent='Updated '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  }catch(e){
+    stxt.textContent='Live — updates';
+
+    document.getElementById('lupd').textContent =
+      'Updated ' + new Date().toLocaleTimeString();
+
+  } catch(e){
+
     dot.className='sdot err';
-    stxt.textContent='Update failed — retrying…';
-    const eb=document.getElementById('errbox');
-    eb.style.display='block';
-    eb.innerHTML=`⚠ <strong>Could not load data:</strong> ${e.message}<br>
-      Make sure the Google Sheet is published: <em>File → Share → Publish to web → CSV</em>. 
-      Trying proxy ${proxyIdx+1} of ${PROXIES.length}…`;
-    if(!allData.length){
-      document.getElementById('upcoming').innerHTML='<div class="empty-state">Waiting for data…</div>';
-      document.getElementById('tbody').innerHTML='<tr class="loading-row"><td colspan="7">Could not load — retrying…</td></tr>';
+    stxt.textContent='Retrying…';
+
+    // ❗ IMPORTANT: old data keep
+    if(allData.length){
+      updateStats(allData);
+      buildUpcoming(allData);
+      buildTable(allData);
     }
+
+    console.warn("Fetch error:", e.message);
   }
 }
-
 fetchData();
-setInterval(fetchData,5000);
+setInterval(fetchData,7000);
 </script>
 </body>
 </html>
